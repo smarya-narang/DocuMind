@@ -8,3 +8,4 @@ faiss-cpu          # No version number allows pip to find the Mac-compatible one
 pypdf
 python-dotenv
 tiktoken
+sentence-transformers
