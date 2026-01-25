@@ -16,4 +16,5 @@ COPY . .
 
 # 6. The command to run your app
 # (We point to the pipeline script we made in Week 2)
+ENV PYTHONPATH=/app
 CMD ["python", "app/services/pipeline.py"]
