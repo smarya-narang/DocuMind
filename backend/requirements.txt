@@ -1,11 +1,10 @@
 fastapi
 uvicorn
-python-multipart
+python-dotenv
+pypdf
 langchain
 langchain-community
-langchain-openai
-faiss-cpu          # No version number allows pip to find the Mac-compatible one
-pypdf
-python-dotenv
-tiktoken
 sentence-transformers
+faiss-cpu
+# Force CPU version of PyTorch to save space
+torch --index-url https://download.pytorch.org/whl/cpu
