@@ -39,14 +39,21 @@ st.markdown("""
         border-radius: 10px;
         padding: 10px;
     }
+    
     [data-testid="stFileUploader"] button {
-        color: #00d2ff !important;
-        border-color: #00d2ff !important;
-        background-color: transparent !important;
+        color: #00d2ff !important;          
+        border-color: #00d2ff !important;   
+        background-color: transparent !important; 
+        border-width: 1px !important;
     }
-    /* ------------------------- */
+    
+    [data-testid="stFileUploader"] button:hover {
+        background-color: rgba(0, 210, 255, 0.1) !important;
+        border-color: white !important;
+        color: white !important;
+    }
 
-    /* BUTTONS: Gradient */
+    /* MAIN BUTTONS: Gradient */
     .stButton > button {
         background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
         color: white;
@@ -54,6 +61,11 @@ st.markdown("""
         padding: 0.5rem 1rem;
         border-radius: 8px;
         font-weight: 600;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
     }
 
     /* INPUT BOX: Glassmorphism */
@@ -63,6 +75,11 @@ st.markdown("""
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 10px;
     }
+    
+    /* CHAT INPUT AREA */
+    .stChatInputContainer {
+        padding-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -70,22 +87,26 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 4. Sidebar
+# 4. Sidebar (UPGRADED FOR MULTIPLE FILES)
 with st.sidebar:
     st.title("🧠 DocuMind")
     st.markdown("### Document Center")
-    uploaded_file = st.file_uploader("Upload Policy PDF", type="pdf")
     
-    if uploaded_file:
+    uploaded_files = st.file_uploader("Upload Policy PDFs", type="pdf", accept_multiple_files=True)
+    
+    if uploaded_files:
         if st.button("🚀 Upload & Analyze", use_container_width=True):
             with st.spinner("Processing neural embeddings..."):
-                files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+                files_to_send = [("files", (file.name, file, "application/pdf")) for file in uploaded_files]
+                
                 try:
-                    response = requests.post("http://127.0.0.1:8000/upload", files=files)
+                    # RESTORED: Pointing back to the correct upload endpoint!
+                    response = requests.post("http://127.0.0.1:8000/upload_multiple", files=files_to_send)
+                    
                     if response.status_code == 200:
-                        st.success("✅ Document Indexed!")
+                        st.success(f"✅ {len(uploaded_files)} Document(s) Indexed!")
                     else:
-                        st.error("❌ Indexing Failed.")
+                        st.error("❌ Indexing Failed. Backend might not be updated yet.")
                 except Exception as e:
                     st.error(f"Error: {e}")
     
@@ -105,28 +126,43 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # 6. Chat Input
-if prompt := st.chat_input("Ask a question about your PDF..."):
+if prompt := st.chat_input("Ask a question about your PDF(s)..."):
+    
+    # A. User Message
     with st.chat_message("user", avatar="👤"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
     
+    # B. AI Response
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
         full_response = ""
+        
         with st.spinner("Thinking..."):
             try:
-                response = requests.post("http://127.0.0.1:8000/query", data={"question": prompt})
+                # UPGRADED: Now sending the JSON payload with history to the backend!
+                response = requests.post(
+                    "http://127.0.0.1:8000/query", 
+                    json={
+                        "question": prompt, 
+                        "history": st.session_state.messages[:-1]
+                    }
+                )
+                
                 if response.status_code == 200:
                     answer = response.json().get("relevant_context", "No context found.")
+                    
+                    # Streaming effect
                     for chunk in answer.split():
                         full_response += chunk + " "
                         time.sleep(0.02)
                         message_placeholder.markdown(full_response + "▌")
                     message_placeholder.markdown(full_response)
                 else:
-                    message_placeholder.error("Backend Error.")
+                    message_placeholder.error(f"Backend Error: {response.status_code}")
                     full_response = "Error."
             except Exception as e:
                 message_placeholder.error(f"Connection Error: {e}")
                 full_response = str(e)
+                
     st.session_state.messages.append({"role": "assistant", "content": full_response})

@@ -1,7 +1,14 @@
+# Security
+.env
+
+# Python Environments
+venv/
 __pycache__/
 *.pyc
-.env
-.venv/
-venv/
+
+# Mac System Files
 .DS_Store
-data/      # Don't commit large datasets/PDFs to Git
+
+# Databases and Uploads
+backend/vectorstore/
+backend/app/data/
