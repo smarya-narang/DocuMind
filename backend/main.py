@@ -1,51 +1,55 @@
-import os
-import shutil
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import shutil
+import os
+from typing import List, Dict, Any
 from app.services.vector_store import create_vector_db, query_vector_db
 
-# Initialize the App
-app = FastAPI(title="DocuMind API", version="1.0")
+app = FastAPI()
+
+# Allow Frontend to talk to Backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR = "app/data"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# --- NEW: Define the structure for incoming questions ---
+class QueryModel(BaseModel):
+    question: str
+    history: List[Dict[str, Any]] = []
 
 @app.get("/")
-async def health_check():
-    """Simple check to see if the server is running."""
+def read_root():
     return {"status": "running", "message": "DocuMind Backend is Live!"}
 
-@app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    """
-    Endpoint to upload a PDF. 
-    It saves the file and instantly triggers the AI training (Vector DB creation).
-    """
-    # Ensure data directory exists
-    os.makedirs("data", exist_ok=True)
+@app.post("/upload_multiple")
+async def upload_multiple_documents(files: List[UploadFile] = File(...)):
+    saved_file_paths = []
     
-    file_location = f"data/{file.filename}"
+    for file in files:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        saved_file_paths.append(file_path)
     
-    # 1. Save the file to disk
-    with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    # 2. Trigger the "Brain" to read and learn it
-    success = create_vector_db(file_location)
+    create_vector_db(saved_file_paths)
     
-    if success:
-        return {"status": "success", "filename": file.filename, "message": "File processed and indexed successfully."}
-    else:
-        return {"status": "error", "message": "Failed to process the PDF."}
+    return {
+        "status": "success", 
+        "filenames": [file.filename for file in files], 
+        "message": f"Brain updated with {len(files)} documents!"
+    }
 
+# --- UPGRADED: Now accepts JSON with history ---
 @app.post("/query")
-async def ask_question(question: str = Form(...)):
-    """
-    Endpoint to ask a question.
-    It searches the Vector DB and returns the relevant text chunks.
-    """
-    # 1. Search the database
-    context = query_vector_db(question)
-    
-    return {"question": question, "relevant_context": context}
-
-if __name__ == "__main__":
-    import uvicorn
-    # Run the server on localhost:8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+async def ask_question(payload: QueryModel):
+    # Pass both the question and the history to the Brain
+    context = query_vector_db(payload.question, payload.history)
+    return {"question": payload.question, "relevant_context": context}

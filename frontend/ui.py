@@ -5,149 +5,164 @@ import time
 # 1. Setup Page Config
 st.set_page_config(page_title="DocuMind AI", page_icon="🧠", layout="wide")
 
-# 2. Inject Custom CSS (Aggressive White Text Mode)
+# 2. Styles: Royal Blue Theme + Browse Button Fix
 st.markdown("""
     <style>
-    /* --- GLOBAL TEXT RESET --- */
-    /* Force all text in the app to be white */
-    .stApp, .stApp p, .stApp div, .stApp span, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
-        color: #FFFFFF !important;
-    }
-    
-    /* --- BACKGROUNDS --- */
-    .stApp {
-        background-color: #0E1117; /* Deep Dark Blue-Black */
-    }
-    section[data-testid="stSidebar"] {
-        background-color: #161B22; /* Slightly lighter sidebar */
-        border-right: 1px solid #30363D;
-    }
-    
-    /* --- INPUT FIELDS --- */
-    /* Text Input Boxes */
-    .stTextInput > div > div > input {
-        background-color: #0D1117;
-        color: #FFFFFF !important; /* Input text white */
-        border: 1px solid #30363D;
-        border-radius: 8px;
-    }
-    /* Placeholder text (the faint text) */
-    ::placeholder {
-        color: #8B949E !important; 
-        opacity: 1; /* Firefox */
+    /* Import Font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
 
-    /* --- BUTTONS --- */
-    /* Primary Action Button */
-    .stButton > button {
-        background: linear-gradient(90deg, #238636 0%, #2EA043 100%);
+    /* BACKGROUND: Deep Royal Blue Gradient */
+    .stApp {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        background-attachment: fixed;
+    }
+
+    /* SIDEBAR: Semi-transparent Dark Blue */
+    section[data-testid="stSidebar"] {
+        background-color: rgba(0, 0, 0, 0.2);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* GLOBAL TEXT: White */
+    h1, h2, h3, p, div, span, label, small {
+        color: #FFFFFF !important;
+    }
+
+    /* --- FILE UPLOADER FIX --- */
+    [data-testid="stFileUploader"] {
+        background-color: rgba(0, 0, 0, 0.3);
+        border: 1px dashed rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        padding: 10px;
+    }
+    
+    [data-testid="stFileUploader"] button {
+        color: #00d2ff !important;          
+        border-color: #00d2ff !important;   
+        background-color: transparent !important; 
+        border-width: 1px !important;
+    }
+    
+    [data-testid="stFileUploader"] button:hover {
+        background-color: rgba(0, 210, 255, 0.1) !important;
+        border-color: white !important;
         color: white !important;
+    }
+
+    /* MAIN BUTTONS: Gradient */
+    .stButton > button {
+        background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+        color: white;
         border: none;
-        padding: 0.6rem 1.2rem;
+        padding: 0.5rem 1rem;
         border-radius: 8px;
-        font-weight: bold;
-        transition: transform 0.2s;
+        font-weight: 600;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
     }
     .stButton > button:hover {
-        transform: scale(1.02);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    }
+
+    /* INPUT BOX: Glassmorphism */
+    .stTextInput > div > div > input {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
     }
     
-    /* --- CHAT BUBBLES --- */
-    /* User Message (Right Side) */
-    .user-card {
-        background-color: #1F6FEB; /* Bright Blue */
-        color: white !important;
-        padding: 15px;
-        border-radius: 15px 15px 5px 20px;
-        margin-bottom: 10px;
-        text-align: right;
-        width: fit-content;
-        margin-left: auto; /* Pushes to right */
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    }
-    /* AI Message (Left Side) */
-    .ai-card {
-        background-color: #21262D; /* Dark Gray */
-        color: white !important;
-        padding: 15px;
-        border-radius: 15px 15px 20px 5px;
-        margin-bottom: 10px;
-        text-align: left;
-        width: fit-content;
-        margin-right: auto; /* Pushes to left */
-        border: 1px solid #30363D;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    }
-    
-    /* --- FILE UPLOADER --- */
-    section[data-testid="stFileUploader"] {
-        background-color: #0D1117;
-        border: 1px dashed #30363D;
+    /* CHAT INPUT AREA */
+    .stChatInputContainer {
+        padding-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Initialize Session State (Chat Memory)
+# 3. Initialize Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 4. Main Header
-st.title("🧠 DocuMind")
-st.markdown("### Enterprise-Grade RAG System")
-
-# 5. Sidebar
+# 4. Sidebar (UPGRADED FOR MULTIPLE FILES)
 with st.sidebar:
-    st.header("📂 Document Center")
-    uploaded_file = st.file_uploader("Upload Policy PDF", type="pdf")
+    st.title("🧠 DocuMind")
+    st.markdown("### Document Center")
     
-    if uploaded_file:
-        if st.button("🚀 Upload & Analyze"):
+    uploaded_files = st.file_uploader("Upload Policy PDFs", type="pdf", accept_multiple_files=True)
+    
+    if uploaded_files:
+        if st.button("🚀 Upload & Analyze", use_container_width=True):
             with st.spinner("Processing neural embeddings..."):
-                files = {"file": (uploaded_file.name, uploaded_file, "application/pdf")}
+                files_to_send = [("files", (file.name, file, "application/pdf")) for file in uploaded_files]
+                
                 try:
-                    response = requests.post("http://127.0.0.1:8000/upload", files=files)
+                    # RESTORED: Pointing back to the correct upload endpoint!
+                    response = requests.post("http://127.0.0.1:8000/upload_multiple", files=files_to_send)
+                    
                     if response.status_code == 200:
-                        st.success("✅ Document Indexed!")
+                        st.success(f"✅ {len(uploaded_files)} Document(s) Indexed!")
                     else:
-                        st.error("❌ Indexing Failed.")
+                        st.error("❌ Indexing Failed. Backend might not be updated yet.")
                 except Exception as e:
-                    st.error(f"Connection Error: {e}")
+                    st.error(f"Error: {e}")
     
     st.markdown("---")
-    if st.button("🗑️ Clear Chat History"):
+    if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
-# 6. Display Chat History
+# 5. Main Chat Area
+st.title("Chat with your Document")
+st.markdown("_Enterprise-Grade RAG System_")
+
+# Display History
 for message in st.session_state.messages:
-    if message["role"] == "user":
-        st.markdown(f'<div class="user-card">👤 <b>You:</b> {message["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="ai-card">🤖 <b>DocuMind:</b><br>{message["content"]}</div>', unsafe_allow_html=True)
+    avatar = "👤" if message["role"] == "user" else "🤖"
+    with st.chat_message(message["role"], avatar=avatar):
+        st.markdown(message["content"])
 
-# 7. Chat Input Area
-with st.form(key="chat_form", clear_on_submit=True):
-    col1, col2 = st.columns([8, 1])
-    with col1:
-        user_input = st.text_input("Ask a question:", placeholder="e.g. What is the leave policy?", label_visibility="collapsed")
-    with col2:
-        submit_button = st.form_submit_button("Send")
-
-if submit_button and user_input:
-    # Save User Message
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# 6. Chat Input
+if prompt := st.chat_input("Ask a question about your PDF(s)..."):
     
-    with st.spinner("Thinking..."):
-        try:
-            # Get AI Response
-            response = requests.post("http://127.0.0.1:8000/query", data={"question": user_input})
-            if response.status_code == 200:
-                answer_text = response.json().get("relevant_context", "No context found.")
+    # A. User Message
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # B. AI Response
+    with st.chat_message("assistant", avatar="🤖"):
+        message_placeholder = st.empty()
+        full_response = ""
+        
+        with st.spinner("Thinking..."):
+            try:
+                # UPGRADED: Now sending the JSON payload with history to the backend!
+                response = requests.post(
+                    "http://127.0.0.1:8000/query", 
+                    json={
+                        "question": prompt, 
+                        "history": st.session_state.messages[:-1]
+                    }
+                )
                 
-                # Save AI Message
-                st.session_state.messages.append({"role": "ai", "content": answer_text})
-                st.rerun()
-            else:
-                st.error("Backend Error.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+                if response.status_code == 200:
+                    answer = response.json().get("relevant_context", "No context found.")
+                    
+                    # Streaming effect
+                    for chunk in answer.split():
+                        full_response += chunk + " "
+                        time.sleep(0.02)
+                        message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(full_response)
+                else:
+                    message_placeholder.error(f"Backend Error: {response.status_code}")
+                    full_response = "Error."
+            except Exception as e:
+                message_placeholder.error(f"Connection Error: {e}")
+                full_response = str(e)
+                
+    st.session_state.messages.append({"role": "assistant", "content": full_response})

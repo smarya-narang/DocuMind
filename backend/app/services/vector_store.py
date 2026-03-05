@@ -1,82 +1,103 @@
 import os
+from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# NOTICE: We use the updated import for embeddings to avoid warnings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from app.services.pdf_loader import load_pdf_text
+from langchain_community.document_loaders import PyPDFLoader
+from groq import Groq
 
-# Define where the database will be saved
+# --- CONFIGURE YOUR LLM HERE ---
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# -------------------------------
+# -------------------------------
+
 DB_FAISS_PATH = "vectorstore/db_faiss"
 
-def create_vector_db(pdf_path: str):
-    """
-    Ingests a PDF, splits text, creates embeddings, and saves to FAISS.
-    Returns True if successful, False otherwise.
-    """
-    print(f"📄 Loading PDF from: {pdf_path}")
+def create_vector_db(pdf_paths: list):
+    print(f"🧠 Learning from {len(pdf_paths)} files...")
+    all_documents = []
     
-    # 1. Load Text
-    raw_text = load_pdf_text(pdf_path)
-    if not raw_text:
-        print("❌ Error: No text found in PDF.")
+    for path in pdf_paths:
+        if os.path.exists(path):
+            try:
+                loader = PyPDFLoader(path)
+                all_documents.extend(loader.load())
+                print(f"📄 Successfully read: {path}")
+            except Exception as e:
+                print(f"❌ Error loading {path}: {e}")
+        else:
+            print(f"⚠️ Warning: File not found at {path}")
+
+    if not all_documents:
         return False
 
-    # 2. Split Text (Chunks)
-    # We split by 500 characters with 50 overlap to keep context
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    texts = text_splitter.split_text(raw_text)
-    print(f"✂️  Split into {len(texts)} chunks.")
-
-    # 3. Create Embeddings
-    print("🧠 Generating Embeddings... (This may take a moment)")
+    texts = text_splitter.split_documents(all_documents)
+    
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
                                        model_kwargs={'device': 'cpu'})
 
-    # 4. Create Vector Store
     try:
-        db = FAISS.from_texts(texts, embeddings)
+        db = FAISS.from_documents(texts, embeddings)
         db.save_local(DB_FAISS_PATH)
-        print(f"💾 Vector Database saved to {DB_FAISS_PATH}")
         return True
     except Exception as e:
-        print(f"❌ Error creating Vector DB: {e}")
         return False
 
-def query_vector_db(query: str):
-    """
-    Searches the local FAISS database for the 3 most relevant chunks.
-    """
-    # 1. Check if DB exists
+# --- UPGRADED: Added the history parameter ---
+def query_vector_db(query: str, history: list = []):
     if not os.path.exists(DB_FAISS_PATH):
         return "⚠️ System Error: No knowledge base found. Please upload a document first."
         
-    # 2. Setup Embeddings (Same model as creation)
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
                                        model_kwargs={'device': 'cpu'})
     
-    # 3. Load the DB
-    # allow_dangerous_deserialization=True is safe here because WE created the file locally
-    db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
+    try:
+        db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        return f"❌ Error loading Brain: {e}"
     
-    # 4. Perform Search (Top 3 results)
-    results = db.similarity_search(query, k=3)
-    
-    # 5. Format results into a single string
-    if results:
+    try:
+        results = db.similarity_search(query, k=4)
+        
+        if not results:
+            return "No relevant information found in the documents."
+            
         context = "\n\n---\n".join([doc.page_content for doc in results])
-        return context
-    else:
-        return "No relevant information found."
+        
+        # Format the chat history into a readable script for the AI
+        history_text = ""
+        # We only take the last 4 messages so we don't overload the AI's token limit
+        for msg in history[-4:]: 
+            role = "User" if msg["role"] == "user" else "Assistant"
+            history_text += f"{role}: {msg['content']}\n"
+        
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Added the Chat History to the prompt!
+        prompt = f"""
+        You are an intelligent assistant. Answer the user's question based ONLY on the provided context. 
+        Keep your answer clear, concise, and conversational. Do not make up information.
+        Use the Chat History to understand pronouns or context from previous questions.
 
-# --- TEST BLOCK (Run this file directly to test) ---
-if __name__ == "__main__":
-    # Test Data Creation
-    test_pdf = "../data/sample_policy.pdf"
-    if os.path.exists(test_pdf):
-        create_vector_db(test_pdf)
-    
-    # Test Search
-    test_query = "What is the leave policy?"
-    answer = query_vector_db(test_query)
-    print(f"\n🔍 Query: {test_query}")
-    print(f"💡 Result:\n{answer}")
+        Chat History:
+        {history_text}
+
+        Context from Documents:
+        {context}
+
+        Current Question:
+        {query}
+        """
+
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+            temperature=0.3, 
+        )
+        
+        return chat_completion.choices[0].message.content
+
+    except Exception as e:
+        return f"🚨 GROQ'S EXACT ERROR: {str(e)}"
