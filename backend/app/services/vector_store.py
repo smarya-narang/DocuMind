@@ -4,7 +4,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
-<<<<<<< HEAD
 from groq import Groq
 
 # --- CONFIGURE YOUR LLM HERE ---
@@ -23,63 +22,33 @@ def create_vector_db(pdf_paths: list):
         if os.path.exists(path):
             try:
                 loader = PyPDFLoader(path)
-                all_documents.extend(loader.load())
-                print(f"📄 Successfully read: {path}")
+                docs = loader.load()
+                all_documents.extend(docs)
+                # --- NEW DEBUG LINE ---
+                print(f"📄 Successfully read {path}. Extracted {len(docs)} pages.")
+                # -----------------------
             except Exception as e:
                 print(f"❌ Error loading {path}: {e}")
         else:
             print(f"⚠️ Warning: File not found at {path}")
 
     if not all_documents:
+        print("❌ Error: No text could be extracted.")
         return False
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     texts = text_splitter.split_documents(all_documents)
     
+    # --- NEW DEBUG LINE ---
+    print(f"✂️  Combined and split into {len(texts)} chunks.")
+    for i, t in enumerate(texts[:5]): # Print first 5 chunks to see if they contain course names
+        print(f"   Chunk {i}: {t.page_content[:50]}...") 
+    # -----------------------
+
+    # ... rest of your function (embeddings and saving) ...
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
                                        model_kwargs={'device': 'cpu'})
 
-=======
-
-# Path where the Brain (Vector Database) will be saved
-DB_FAISS_PATH = "vectorstore/db_faiss"
-
-def create_vector_db(pdf_path: str):
-    """
-    Ingests a PDF, splits text, creates embeddings, and saves to FAISS.
-    """
-    print(f"🧠 Learning from: {pdf_path}")
-    
-    # 1. Load the PDF
-    if not os.path.exists(pdf_path):
-        print(f"❌ Error: File not found at {pdf_path}")
-        return False
-        
-    try:
-        loader = PyPDFLoader(pdf_path)
-        documents = loader.load()
-        
-        if not documents:
-            print("❌ Error: No text could be extracted from this PDF.")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Error loading PDF: {e}")
-        return False
-
-    # 2. Split Text (Chunks)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    texts = text_splitter.split_documents(documents)
-    
-    print(f"✂️  Split into {len(texts)} chunks.")
-
-    # 3. Create Embeddings
-    print("🧠 Generating Embeddings... (This may take a moment)")
-    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
-                                       model_kwargs={'device': 'cpu'})
-
-    # 4. Create and Save Vector Store
->>>>>>> main
     try:
         db = FAISS.from_documents(texts, embeddings)
         db.save_local(DB_FAISS_PATH)
@@ -92,23 +61,14 @@ def query_vector_db(query: str, history: list = []):
     if not os.path.exists(DB_FAISS_PATH):
         return "⚠️ System Error: No knowledge base found. Please upload a document first."
         
-<<<<<<< HEAD
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
                                        model_kwargs={'device': 'cpu'})
     
-=======
-    # 2. Setup Embeddings
-    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2',
-                                       model_kwargs={'device': 'cpu'})
-    
-    # 3. Load the DB
->>>>>>> main
     try:
         db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
     except Exception as e:
         return f"❌ Error loading Brain: {e}"
     
-<<<<<<< HEAD
     try:
         results = db.similarity_search(query, k=4)
         
@@ -152,15 +112,3 @@ def query_vector_db(query: str, history: list = []):
 
     except Exception as e:
         return f"🚨 GROQ'S EXACT ERROR: {str(e)}"
-=======
-    # 4. Perform Search
-    try:
-        results = db.similarity_search(query, k=3)
-        if results:
-            context = "\n\n---\n".join([doc.page_content for doc in results])
-            return context
-        else:
-            return "No relevant information found."
-    except Exception as e:
-        return f"❌ Search Error: {e}"
->>>>>>> main
