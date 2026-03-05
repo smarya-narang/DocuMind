@@ -1,6 +1,6 @@
 from app.services.pdf_loader import load_pdf_text
 from app.services.vector_store import create_vector_db
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def build_knowledge_base(pdf_path):
     print(f"📂 Loading PDF: {pdf_path}")
