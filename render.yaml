@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: documind-backend
+    env: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false # Set this securely in the Render dashboard
+
+  - type: web
+    name: documind-frontend
+    env: docker
+    plan: free
+    dockerContext: ./frontend
+    dockerfilePath: ./frontend/Dockerfile
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: documind-backend
+          envVarKey: RENDER_EXTERNAL_URL
