@@ -2,19 +2,17 @@ services:
   - type: web
     name: documind-backend
     env: docker
+    plan: free
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
     envVars:
       - key: GROQ_API_KEY
         sync: false # Set this securely in the Render dashboard
-    disk:
-      name: vector-data
-      mountPath: /app/data
-      sizeGB: 1
 
   - type: web
     name: documind-frontend
     env: docker
+    plan: free
     dockerContext: ./frontend
     dockerfilePath: ./frontend/Dockerfile
     envVars:
